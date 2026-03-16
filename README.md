@@ -1,5 +1,9 @@
 # go-panicguard
 
+[![CI](https://github.com/philiprehberger/go-panicguard/actions/workflows/ci.yml/badge.svg)](https://github.com/philiprehberger/go-panicguard/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/philiprehberger/go-panicguard.svg)](https://pkg.go.dev/github.com/philiprehberger/go-panicguard)
+[![License](https://img.shields.io/github/license/philiprehberger/go-panicguard)](LICENSE)
+
 Panic recovery utilities for Go. Run goroutines safely, convert panics to errors, and protect HTTP handlers from crashes.
 
 ## Installation
@@ -88,6 +92,13 @@ http.ListenAndServe(":8080", middleware(mux))
 | `SetOnPanic(fn)` | Sets a global handler called on every recovered panic |
 | `Middleware(next)` | HTTP middleware that recovers panics and returns 500 |
 | `MiddlewareWithHandler(onPanic)` | HTTP middleware with a custom recovery response handler |
+
+## Development
+
+```bash
+go test ./...
+go vet ./...
+```
 
 ## License
 
