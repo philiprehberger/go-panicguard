@@ -4,7 +4,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/philiprehberger/go-panicguard.svg)](https://pkg.go.dev/github.com/philiprehberger/go-panicguard)
 [![License](https://img.shields.io/github/license/philiprehberger/go-panicguard)](LICENSE)
 
-Panic recovery utilities for Go. Run goroutines safely, convert panics to errors, and protect HTTP handlers from crashes.
+Panic recovery utilities for Go — safe goroutines, panic-to-error conversion, and HTTP handler protection
 
 ## Installation
 
