@@ -13,6 +13,7 @@ func Middleware(next http.Handler) http.Handler {
 		defer func() {
 			if rec := recover(); rec != nil {
 				stack := debug.Stack()
+				recordPanic(rec)
 				if handler := getOnPanic(); handler != nil {
 					handler(rec, stack)
 				}
@@ -31,6 +32,7 @@ func MiddlewareWithHandler(onPanic func(w http.ResponseWriter, r *http.Request, 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if rec := recover(); rec != nil {
+					recordPanic(rec)
 					onPanic(w, r, rec)
 				}
 			}()

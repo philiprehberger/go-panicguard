@@ -51,6 +51,51 @@ func handler() (err error) {
 }
 ```
 
+### Named goroutines
+
+```go
+panicguard.GoNamed("email-sender", func() {
+    // If this panics, the name "email-sender" is included in the panic log.
+    sendEmails()
+})
+```
+
+### Context-aware goroutines
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+
+panicguard.GoCtx(ctx, func(ctx context.Context) {
+    // ctx is passed through; panics are still recovered.
+    fetchData(ctx)
+})
+```
+
+### Panic statistics
+
+```go
+panicguard.Go(func() { panic("oops") })
+time.Sleep(100 * time.Millisecond)
+
+stats := panicguard.Stats()
+fmt.Println(stats.TotalPanics) // 1
+fmt.Println(stats.LastPanic)   // time of the last panic
+fmt.Println(stats.LastValue)   // "oops"
+
+panicguard.ResetStats() // reset counters (useful in tests)
+```
+
+### Typed panic recovery
+
+```go
+defer func() {
+    if pe, ok := panicguard.RecoverAs[*panicguard.PanicError](recover()); ok {
+        log.Printf("panic value: %v", pe.Value)
+    }
+}()
+```
+
 ### Global panic hook
 
 ```go
@@ -84,10 +129,16 @@ http.ListenAndServe(":8080", middleware(mux))
 |-----------------|-------------|
 | `PanicError` | Wraps a recovered panic value with `Value` and `Stack` fields |
 | `PanicError.Error()` | Returns `"panic: {value}"` |
+| `PanicStats` | Holds `TotalPanics`, `LastPanic`, and `LastValue` fields |
 | `Go(fn)` | Runs fn in a goroutine with panic recovery |
 | `GoErr(fn)` | Runs fn in a goroutine, returns a channel with the error result or `*PanicError` |
+| `GoNamed(name, fn)` | Runs fn in a named goroutine; name is included in panic reports |
+| `GoCtx(ctx, fn)` | Runs fn in a goroutine, passing ctx; panics are recovered |
 | `Recover(r)` | Call in a deferred func with `recover()` to convert a panic into a `*PanicError` |
+| `RecoverAs[T](r)` | Typed panic recovery — extracts error type T from a recovered value |
 | `SetOnPanic(fn)` | Sets a global handler called on every recovered panic |
+| `Stats()` | Returns global panic statistics (thread-safe) |
+| `ResetStats()` | Resets global panic statistics to zero values |
 | `Middleware(next)` | HTTP middleware that recovers panics and returns 500 |
 | `MiddlewareWithHandler(onPanic)` | HTTP middleware with a custom recovery response handler |
 

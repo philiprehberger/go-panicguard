@@ -1,7 +1,9 @@
 package panicguard
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -230,5 +232,316 @@ func TestSetOnPanicClear(t *testing.T) {
 
 	if called {
 		t.Error("expected handler not to be called after clearing")
+	}
+}
+
+// --- GoNamed tests ---
+
+func TestGoNamedRunsFunction(t *testing.T) {
+	var mu sync.Mutex
+	done := false
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	GoNamed("test-task", func() {
+		defer wg.Done()
+		mu.Lock()
+		done = true
+		mu.Unlock()
+	})
+
+	wg.Wait()
+	mu.Lock()
+	defer mu.Unlock()
+	if !done {
+		t.Fatal("expected GoNamed to run the function")
+	}
+}
+
+func TestGoNamedIncludesNameInPanic(t *testing.T) {
+	var mu sync.Mutex
+	var recovered any
+
+	SetOnPanic(func(r any, s []byte) {
+		mu.Lock()
+		recovered = r
+		mu.Unlock()
+	})
+	defer SetOnPanic(nil)
+
+	GoNamed("worker-42", func() {
+		panic("something broke")
+	})
+
+	time.Sleep(100 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if recovered == nil {
+		t.Fatal("expected OnPanic to be called")
+	}
+	s := fmt.Sprintf("%v", recovered)
+	if !strings.Contains(s, "worker-42") {
+		t.Errorf("expected recovered value to contain name %q, got %v", "worker-42", s)
+	}
+	if !strings.Contains(s, "something broke") {
+		t.Errorf("expected recovered value to contain panic message, got %v", s)
+	}
+}
+
+// --- GoCtx tests ---
+
+func TestGoCtxRunsFunction(t *testing.T) {
+	var mu sync.Mutex
+	done := false
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	GoCtx(context.Background(), func(ctx context.Context) {
+		defer wg.Done()
+		mu.Lock()
+		done = true
+		mu.Unlock()
+	})
+
+	wg.Wait()
+	mu.Lock()
+	defer mu.Unlock()
+	if !done {
+		t.Fatal("expected GoCtx to run the function")
+	}
+}
+
+func TestGoCtxPassesContext(t *testing.T) {
+	type key struct{}
+	ctx := context.WithValue(context.Background(), key{}, "hello")
+
+	var mu sync.Mutex
+	var got any
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	GoCtx(ctx, func(ctx context.Context) {
+		defer wg.Done()
+		mu.Lock()
+		got = ctx.Value(key{})
+		mu.Unlock()
+	})
+
+	wg.Wait()
+	mu.Lock()
+	defer mu.Unlock()
+	if got != "hello" {
+		t.Errorf("expected context value %q, got %v", "hello", got)
+	}
+}
+
+func TestGoCtxRecoversPanic(t *testing.T) {
+	var mu sync.Mutex
+	var recovered any
+
+	SetOnPanic(func(r any, s []byte) {
+		mu.Lock()
+		recovered = r
+		mu.Unlock()
+	})
+	defer SetOnPanic(nil)
+
+	GoCtx(context.Background(), func(ctx context.Context) {
+		panic("ctx panic")
+	})
+
+	time.Sleep(100 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if recovered == nil {
+		t.Fatal("expected OnPanic to be called")
+	}
+	if recovered != "ctx panic" {
+		t.Errorf("expected %q, got %v", "ctx panic", recovered)
+	}
+}
+
+func TestGoCtxCancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	var mu sync.Mutex
+	var ctxErr error
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	GoCtx(ctx, func(ctx context.Context) {
+		defer wg.Done()
+		mu.Lock()
+		ctxErr = ctx.Err()
+		mu.Unlock()
+	})
+
+	wg.Wait()
+	mu.Lock()
+	defer mu.Unlock()
+	if ctxErr != context.Canceled {
+		t.Errorf("expected context.Canceled, got %v", ctxErr)
+	}
+}
+
+// --- Stats tests ---
+
+func TestStatsIncrementOnPanic(t *testing.T) {
+	ResetStats()
+	SetOnPanic(nil)
+
+	Go(func() { panic("stat-1") })
+	Go(func() { panic("stat-2") })
+	Go(func() { panic("stat-3") })
+
+	time.Sleep(200 * time.Millisecond)
+
+	stats := Stats()
+	if stats.TotalPanics != 3 {
+		t.Errorf("expected TotalPanics=3, got %d", stats.TotalPanics)
+	}
+	if stats.LastPanic.IsZero() {
+		t.Error("expected LastPanic to be set")
+	}
+	if stats.LastValue == nil {
+		t.Error("expected LastValue to be set")
+	}
+}
+
+func TestStatsFromGoErr(t *testing.T) {
+	ResetStats()
+	SetOnPanic(nil)
+
+	ch := GoErr(func() error {
+		panic("goerr-stat")
+	})
+	<-ch
+
+	stats := Stats()
+	if stats.TotalPanics != 1 {
+		t.Errorf("expected TotalPanics=1, got %d", stats.TotalPanics)
+	}
+}
+
+func TestStatsFromGoNamed(t *testing.T) {
+	ResetStats()
+	SetOnPanic(nil)
+
+	GoNamed("stat-named", func() { panic("named-stat") })
+	time.Sleep(100 * time.Millisecond)
+
+	stats := Stats()
+	if stats.TotalPanics != 1 {
+		t.Errorf("expected TotalPanics=1, got %d", stats.TotalPanics)
+	}
+}
+
+func TestStatsFromGoCtx(t *testing.T) {
+	ResetStats()
+	SetOnPanic(nil)
+
+	GoCtx(context.Background(), func(ctx context.Context) { panic("ctx-stat") })
+	time.Sleep(100 * time.Millisecond)
+
+	stats := Stats()
+	if stats.TotalPanics != 1 {
+		t.Errorf("expected TotalPanics=1, got %d", stats.TotalPanics)
+	}
+}
+
+func TestResetStats(t *testing.T) {
+	ResetStats()
+	SetOnPanic(nil)
+
+	Go(func() { panic("before-reset") })
+	time.Sleep(100 * time.Millisecond)
+
+	if Stats().TotalPanics != 1 {
+		t.Fatal("expected 1 panic before reset")
+	}
+
+	ResetStats()
+	stats := Stats()
+	if stats.TotalPanics != 0 {
+		t.Errorf("expected TotalPanics=0 after reset, got %d", stats.TotalPanics)
+	}
+	if !stats.LastPanic.IsZero() {
+		t.Error("expected LastPanic to be zero after reset")
+	}
+	if stats.LastValue != nil {
+		t.Errorf("expected LastValue to be nil after reset, got %v", stats.LastValue)
+	}
+}
+
+func TestStatsNoPanic(t *testing.T) {
+	ResetStats()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	Go(func() {
+		defer wg.Done()
+		// no panic
+	})
+	wg.Wait()
+
+	stats := Stats()
+	if stats.TotalPanics != 0 {
+		t.Errorf("expected TotalPanics=0, got %d", stats.TotalPanics)
+	}
+}
+
+// --- RecoverAs tests ---
+
+type customError struct {
+	Code int
+}
+
+func (e *customError) Error() string {
+	return fmt.Sprintf("code: %d", e.Code)
+}
+
+func TestRecoverAsNil(t *testing.T) {
+	val, ok := RecoverAs[*PanicError](nil)
+	if ok {
+		t.Error("expected ok=false for nil")
+	}
+	if val != nil {
+		t.Errorf("expected zero value, got %v", val)
+	}
+}
+
+func TestRecoverAsDirectMatch(t *testing.T) {
+	original := &customError{Code: 42}
+	val, ok := RecoverAs[*customError](original)
+	if !ok {
+		t.Fatal("expected ok=true for direct match")
+	}
+	if val.Code != 42 {
+		t.Errorf("expected Code=42, got %d", val.Code)
+	}
+}
+
+func TestRecoverAsPanicError(t *testing.T) {
+	// When r is a string, RecoverAs wraps it in PanicError. We should
+	// be able to extract *PanicError via errors.As.
+	val, ok := RecoverAs[*PanicError]("some string")
+	if !ok {
+		t.Fatal("expected ok=true for string wrapped in PanicError")
+	}
+	if val.Value != "some string" {
+		t.Errorf("expected Value=%q, got %v", "some string", val.Value)
+	}
+}
+
+func TestRecoverAsNoMatch(t *testing.T) {
+	// A string panic cannot be cast to *customError
+	val, ok := RecoverAs[*customError]("not a custom error")
+	if ok {
+		t.Error("expected ok=false for non-matching type")
+	}
+	if val != nil {
+		t.Errorf("expected nil, got %v", val)
 	}
 }
