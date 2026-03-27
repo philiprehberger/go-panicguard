@@ -1,6 +1,6 @@
 # go-panicguard
 
-[![CI](https://github.com/philiprehberger/go-panicguard/actions/workflows/ci.yml/badge.svg)](https://github.com/philiprehberger/go-panicguard/actions/workflows/ci.yml) [![Go Reference](https://pkg.go.dev/badge/github.com/philiprehberger/go-panicguard.svg)](https://pkg.go.dev/github.com/philiprehberger/go-panicguard) [![License](https://img.shields.io/github/license/philiprehberger/go-panicguard)](LICENSE)
+[![CI](https://github.com/philiprehberger/go-panicguard/actions/workflows/ci.yml/badge.svg)](https://github.com/philiprehberger/go-panicguard/actions/workflows/ci.yml) [![Go Reference](https://pkg.go.dev/badge/github.com/philiprehberger/go-panicguard.svg)](https://pkg.go.dev/github.com/philiprehberger/go-panicguard) [![License](https://img.shields.io/github/license/philiprehberger/go-panicguard)](LICENSE) [![Sponsor](https://img.shields.io/badge/sponsor-GitHub%20Sponsors-ec6cb9)](https://github.com/sponsors/philiprehberger)
 
 Panic recovery utilities for Go — safe goroutines, panic-to-error conversion, and HTTP handler protection
 
